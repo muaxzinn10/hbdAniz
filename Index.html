@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Happy 17th Birthday Anitchaya</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #f472b6; /* Pink-400 */
+            --accent: #fbbf24; /* Amber-400 */
+        }
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Kanit', sans-serif;
+            background-color: #0f172a; /* Fallback dark */
+            touch-action: none; /* Prevent swipe to go back on mobile */
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none; /* Let clicks pass through to canvas */
+        }
+
+        .scene {
+            position: absolute;
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(30px) scale(0.95);
+            transition: opacity 1.5s ease-out, transform 1.5s ease-out;
+            pointer-events: none;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 8px; /* Space between words */
+        }
+
+        .scene.active {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .word {
+            display: inline-block;
+            opacity: 0;
+            transform: translateY(20px);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.25rem;
+            line-height: 2.2; /* ปรับให้ระยะบรรทัดกว้างขึ้นเพื่อรองรับคำที่ใหญ่ขึ้น */
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            /* Animation handled by JS inline styles for staggering */
+        }
+
+        @media (min-width: 768px) {
+            .word {
+                font-size: 1.75rem;
+                gap: 12px;
+            }
+        }
+
+        .word.show {
+            animation: wordAppear 0.8s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+        }
+
+        @keyframes wordAppear {
+            0% { opacity: 0; transform: translateY(20px) rotateX(-30deg); filter: blur(5px); }
+            100% { opacity: 1; transform: translateY(0) rotateX(0); filter: blur(0); }
+        }
+
+        .highlight {
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 1.6em; /* ขยายขนาดคำไฮไลท์สีชมพูให้ใหญ่ขึ้น */
+            text-shadow: 0 0 15px rgba(244, 114, 182, 0.6);
+            animation: pulseGlow 3s infinite alternate;
+        }
+        
+        .highlight-gold {
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 1.7em; /* ขยายขนาดคำไฮไลท์สีทองให้ใหญ่ขึ้นไปอีก */
+            text-shadow: 0 0 15px rgba(251, 191, 36, 0.6);
+            animation: floatText 4s infinite ease-in-out;
+        }
+
+        @keyframes pulseGlow {
+            0% { text-shadow: 0 0 10px rgba(244, 114, 182, 0.4); }
+            100% { text-shadow: 0 0 25px rgba(244, 114, 182, 0.9), 0 0 40px rgba(244, 114, 182, 0.4); }
+        }
+
+        @keyframes floatText {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .instruction {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            animation: breathe 2s infinite ease-in-out;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+        }
+
+        /* Overlay for smooth background color transitions */
+        #bg-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #090916 0%, #171124 100%);
+            transition: background 2s ease-in-out;
+            z-index: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Background Color Transitioner -->
+    <div id="bg-overlay"></div>
+
+    <!-- Interactive Canvas -->
+    <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <!-- Text UI -->
+    <div id="ui-container">
+        <!-- Scenes will be injected here by JS -->
+    </div>
+
+    <div class="instruction" id="instruction">แตะหน้าจอเพื่อเดินทางต่อ ♡</div>
+
+    <script>
+        // --- CONTENT & SCENE DATA ---
+        // Breaking down the beautiful message into cinematic scenes
+        const storyData = [
+            {
+                text: "สุขสันต์วันเกิดนะคับ <br><br> |Hเด็กหญิงอนิชญา| ของเค้า",
+                bgColor: "linear-gradient(135deg, #090916 0%, #171124 100%)" // Dark romantic
+            },
+            {
+                text: "ในที่สุดก็เวียนมาถึงวันพิเศษอีกปีแล้วนะ ตอนนี้แฟนเค้าโตเป็นสาวอายุ |G17 ปี| เต็มแล้ว",
+                bgColor: "linear-gradient(135deg, #100b1a 0%, #201333 100%)"
+            },
+            {
+                text: "เค้าภูมิใจในตัวแฟนมากๆ เลยนะรู้มั้ย ขอบคุณแฟนจริงๆ นะ ที่เราคอยอยู่ข้างๆ กัน |Hไม่เคยปล่อยมือไปไหน|",
+                bgColor: "linear-gradient(135deg, #161026 0%, #2a1538 100%)"
+            },
+            {
+                text: "ขอบคุณสำหรับความเชื่อใจที่มอบให้กัน ขอบคุณที่ให้เค้าได้เป็นคน |Hคอยรับฟัง| ทุกๆ เรื่องราวในชีวิตของแฟนนะ",
+                bgColor: "linear-gradient(135deg, #1c1433 0%, #311636 100%)"
+            },
+            {
+                text: "ไม่ว่าจะเป็นวันที่แฟนมีความสุขจนยิ้มกว้าง หรือในวันที่ต้องเจอกับเรื่องเหนื่อยล้า ท้อแท้ และกดดันจนแทบหมดแรง",
+                bgColor: "linear-gradient(135deg, #181938 0%, #211c42 100%)" // Slightly cooler/moodier for the down moments
+            },
+            {
+                text: "แต่เค้าอยากให้แฟนจำคำนี้เอาไว้ให้ขึ้นใจเลยนะว่า... วันไหนที่โลกภายนอกมันใจร้าย หรือรู้สึกเหนื่อยจนเดินต่อไม่ไหว",
+                bgColor: "linear-gradient(135deg, #151a30 0%, #221c38 100%)"
+            },
+            {
+                text: "|Hร้องไห้ออกมาได้เลยนะ| แล้วหันกลับมามองตรงนี้ แฟนจะเจอเค้า |Gรออยู่ตรงนี้เสมอ| คอยระบายให้เค้าฟังได้ทุกเรื่องเลย",
+                bgColor: "linear-gradient(135deg, #1a172e 0%, #301736 100%)"
+            },
+            {
+                text: "เค้าพร้อมที่จะเป็น |Gเซฟโซนที่ปลอดภัยที่สุด| เป็นอ้อมกอดที่อบอุ่น และอยู่ตรงนี้เพื่อซัพพอร์ตแฟนคนเดียวตลอดไปนะ",
+                bgColor: "linear-gradient(135deg, #24142c 0%, #3d1430 100%)" // Getting warmer
+            },
+            {
+                text: "สำหรับวันเกิดปีนี้ เค้าไม่ได้ขออะไรที่มากมายเลย ขอแค่ให้แฟนมี |Hรอยยิ้มที่สดใส| ไร้ความกังวลในทุกๆ วัน",
+                bgColor: "linear-gradient(135deg, #2e1529 0%, #4a152e 100%)"
+            },
+            {
+                text: "มีความสุขกับสิ่งเล็กๆ รอบตัวในทุกเช้าที่ตื่นมา มีสุขภาพร่างกายที่แข็งแรง ไม่เจ็บไม่ไข้นะคับ",
+                bgColor: "linear-gradient(135deg, #331726 0%, #54172f 100%)"
+            },
+            {
+                text: "และที่สำคัญที่สุด ขอให้แฟนประสบความสำเร็จในทุกความตั้งใจ ได้เดินตามความฝันอย่างราบรื่น จนได้เป็น |Gคุณหมอ| ที่เก่งและอ่อนโยนในแบบที่ฝันไว้ให้สำเร็จนะ",
+                bgColor: "linear-gradient(135deg, #1a2a3a 0%, #1f425c 100%)" // Doctor/Medical dreamy blue/teal
+            },
+            {
+                text: "เค้าเชื่อมั่นในศักยภาพของแฟนเสมอ ว่าคนเก่งของเค้าต้องทำมันได้แน่นอน |Hร้อยเปอร์เซ็นต์|",
+                bgColor: "linear-gradient(135deg, #23203b 0%, #3b2347 100%)"
+            },
+            {
+                text: "ขอให้แฟนเลือกที่จะมีความสุขในชีวิต และอยู่บนโลกใบนี้ไปนานๆ |Hเดินจับมือเคียงข้างกัน| แบบนี้ให้นานที่สุดเท่าที่จะทำได้เลยนะ",
+                bgColor: "linear-gradient(135deg, #331d36 0%, #522244 100%)"
+            },
+            {
+                text: "ให้โอกาสเค้าได้ทำหน้าที่ดูแลและรักแฟนอย่างดีที่สุด ได้คอยเอาใจใส่ และอยู่เคียงข้างเป็นกำลังใจให้ในทุกๆ ก้าวของชีวิตนับจากนี้ไปตลอดเลยนะคับ",
+                bgColor: "linear-gradient(135deg, #3d1c33 0%, #631c3b 100%)"
+            },
+            {
+                text: "รักแฟนที่สุดในโลกเลยนะ เจ้าความสุขและรอยยิ้มของเค้า สุขสันต์วันเกิดอายุ 17 ปีอีกครั้งนะคับ |Gคนเก่งของเค้า| <br><br> ขอให้เป็นปีที่ดีและมีความสุขที่สุดเลยนะ ♡",
+                bgColor: "linear-gradient(135deg, #471b30 0%, #7d1c43 100%)" // Warmest passionate end
+            }
+        ];
+
+        let currentSceneIndex = 0;
+        let isTransitioning = false;
+        const uiContainer = document.getElementById('ui-container');
+        const bgOverlay = document.getElementById('bg-overlay');
+        const instruction = document.getElementById('instruction');
+
+        // --- DOM GENERATION ---
+        function parseText(text) {
+            // Split by space, but keep <br> intact
+            const words = text.split(/\s+(?![^<]*>)/); 
+            let html = '';
+            
+            words.forEach(word => {
+                if (word === "<br>" || word === "<br><br>") {
+                    html += `<div class="w-full h-2 md:h-4"></div>`; // Break line using tailwind full width
+                    return;
+                }
+
+                let cleanWord = word;
+                let cssClass = 'word';
+
+                // Check for custom formatting markers
+                if (word.includes('|H')) {
+                    cssClass += ' highlight';
+                    cleanWord = word.replace('|H', '').replace('|', '');
+                } else if (word.includes('|G')) {
+                    cssClass += ' highlight-gold';
+                    cleanWord = word.replace('|G', '').replace('|', '');
+                }
+
+                html += `<span class="${cssClass}">${cleanWord}</span>`;
+            });
+            return html;
+        }
+
+        function createScenes() {
+            storyData.forEach((data, index) => {
+                const sceneDiv = document.createElement('div');
+                sceneDiv.className = `scene ${index === 0 ? 'active' : ''}`;
+                sceneDiv.id = `scene-${index}`;
+                sceneDiv.innerHTML = parseText(data.text);
+                uiContainer.appendChild(sceneDiv);
+            });
+        }
+
+        function animateWords(sceneDiv) {
+            const words = sceneDiv.querySelectorAll('.word');
+            words.forEach((word, index) => {
+                word.classList.remove('show');
+                // Stagger the animation
+                setTimeout(() => {
+                    word.classList.add('show');
+                }, index * 100 + 100); // 100ms delay per word
+            });
+        }
+
+        function nextScene() {
+            if (isTransitioning || currentSceneIndex >= storyData.length - 1) return;
+            isTransitioning = true;
+
+            const currentScene = document.getElementById(`scene-${currentSceneIndex}`);
+            currentScene.classList.remove('active');
+            // Remove word animations so they can replay if we ever went back (not implemented here but good practice)
+            
+            currentSceneIndex++;
+            
+            const newScene = document.getElementById(`scene-${currentSceneIndex}`);
+            bgOverlay.style.background = storyData[currentSceneIndex].bgColor;
+
+            setTimeout(() => {
+                newScene.classList.add('active');
+                animateWords(newScene);
+                isTransitioning = false;
+                
+                // Hide instruction after a few clicks
+                if(currentSceneIndex > 2) {
+                    instruction.style.opacity = '0';
+                    setTimeout(() => instruction.style.display = 'none', 1000);
+                }
+            }, 800); // Wait for current scene to fade out
+        }
+
+        // --- INTERACTIVE CANVAS BACKGROUND ---
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+        let mouse = { x: null, y: null, radius: 100 };
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Particle Class
+        class Particle {
+            constructor(x, y, isBurst = false) {
+                this.x = x || Math.random() * width;
+                this.y = y || Math.random() * height;
+                this.size = Math.random() * 2 + 0.5;
+                
+                if (isBurst) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 5 + 2;
+                    this.vx = Math.cos(angle) * speed;
+                    this.vy = Math.sin(angle) * speed;
+                    this.life = 100;
+                    this.size = Math.random() * 3 + 1;
+                } else {
+                    this.vx = (Math.random() - 0.5) * 0.5;
+                    this.vy = (Math.random() - 0.5) * 0.5;
+                    this.life = Infinity;
+                }
+                
+                this.baseColor = `rgba(255, ${Math.random() * 100 + 150}, ${Math.random() * 100 + 150}`;
+                this.isBurst = isBurst;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Mouse interaction for ambient particles
+                if (!this.isBurst && mouse.x != null) {
+                    let dx = mouse.x - this.x;
+                    let dy = mouse.y - this.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < mouse.radius) {
+                        const forceDirectionX = dx / distance;
+                        const forceDirectionY = dy / distance;
+                        const force = (mouse.radius - distance) / mouse.radius;
+                        this.x -= forceDirectionX * force * 2;
+                        this.y -= forceDirectionY * force * 2;
+                    }
+                }
+
+                // Wrap around screen for ambient
+                if (!this.isBurst) {
+                    if (this.x < 0) this.x = width;
+                    if (this.x > width) this.x = 0;
+                    if (this.y < 0) this.y = height;
+                    if (this.y > height) this.y = 0;
+                } else {
+                    this.life--;
+                    this.size *= 0.95; // Shrink burst particles
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                
+                let opacity = this.isBurst ? this.life / 100 : Math.random() * 0.5 + 0.3;
+                ctx.fillStyle = `${this.baseColor}, ${opacity})`;
+                
+                // Add glow
+                ctx.shadowBlur = this.isBurst ? 15 : 5;
+                ctx.shadowColor = this.baseColor + ', 1)';
+                
+                ctx.fill();
+                ctx.shadowBlur = 0; // Reset
+            }
+        }
+
+        // Init ambient particles
+        function initParticles() {
+            particles = [];
+            const particleCount = Math.min(window.innerWidth / 10, 150); // Responsive amount
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        // Burst effect on click
+        function createBurst(x, y) {
+            for (let i = 0; i < 30; i++) {
+                particles.push(new Particle(x, y, true));
+            }
+        }
+
+        function animateCanvas() {
+            ctx.clearRect(0, 0, width, height);
+            
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                
+                // Remove dead burst particles
+                if (particles[i].isBurst && particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                    i--;
+                }
+            }
+            requestAnimationFrame(animateCanvas);
+        }
+
+        // --- EVENT LISTENERS ---
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.x;
+            mouse.y = e.y;
+        });
+
+        // Touch support for interaction
+        window.addEventListener('touchmove', (e) => {
+            mouse.x = e.touches[0].clientX;
+            mouse.y = e.touches[0].clientY;
+        });
+
+        window.addEventListener('mouseout', () => {
+            mouse.x = null;
+            mouse.y = null;
+        });
+        window.addEventListener('touchend', () => {
+            mouse.x = null;
+            mouse.y = null;
+        });
+
+        // Main click/tap to advance
+        window.addEventListener('click', (e) => {
+            createBurst(e.clientX, e.clientY);
+            nextScene();
+        });
+
+        window.addEventListener('touchstart', (e) => {
+             // Prevent default only if we don't want zooming, but let's just use it for burst and next
+             createBurst(e.touches[0].clientX, e.touches[0].clientY);
+             nextScene();
+        }, {passive: true});
+
+        // --- INITIALIZATION ---
+        createScenes();
+        initParticles();
+        animateCanvas();
+        
+        // Trigger first animation
+        setTimeout(() => {
+            animateWords(document.getElementById('scene-0'));
+        }, 500);
+
+    </script>
+</body>
+</html>
+
+
